@@ -59,7 +59,7 @@ var _ = FDescribe("create-space", func() {
 	When("invoked with no arguments", func() {
 		It("shows an error and the help text", func() {
 			session := helpers.CF("create-space")
-			Eventually(session).Should(Say(`Incorrect Usage: the required argument 'SPACE' was not provided`))
+			Eventually(session.Err).Should(Say("Incorrect Usage: the required argument `SPACE` was not provided"))
 			expectHelpText(session)
 			Eventually(session).Should(Exit(1))
 		})
@@ -220,7 +220,7 @@ var _ = FDescribe("create-space", func() {
 
 					It("fails with an error", func() {
 						Eventually(session).Should(Say(`Creating space %s in org %s as %s\.\.\.`, spaceName, orgName, user))
-						Eventually(session.Err).Should(Say(`Org no-such-org does not exist or is not accessible`))
+						Eventually(session.Err).Should(Say(`Org %s does not exist or is not accessible`, orgName))
 						Eventually(session).Should(Say(`FAILED\n`))
 						Eventually(session).Should(Exit(1))
 					})

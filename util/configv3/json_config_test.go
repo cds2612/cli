@@ -92,23 +92,6 @@ var _ = Describe("JSONConfig", func() {
 		})
 	})
 
-	Describe("HasTargetedOrganization", func() {
-		When("an organization is targeted", func() {
-			It("returns true", func() {
-				config = new(Config)
-				config.SetOrganizationInformation("guid-value-1", "my-org-name")
-				Expect(config.HasTargetedOrganization()).To(BeTrue())
-			})
-		})
-
-		When("an organization is not targeted", func() {
-			It("returns false", func() {
-				config = new(Config)
-				Expect(config.HasTargetedOrganization()).To(BeFalse())
-			})
-		})
-	})
-
 	Describe("CurrentUserName", func() {
 		When("using client credentials and the user token is set", func() {
 			It("returns the username", func() {

@@ -1,6 +1,7 @@
 package v2
 
 import (
+	"code.cloudfoundry.org/cli/actor/sharedaction"
 	"code.cloudfoundry.org/cli/actor/v2action"
 	"code.cloudfoundry.org/cli/command"
 	"code.cloudfoundry.org/cli/command/flag"
@@ -35,7 +36,9 @@ func (cmd *CreateSpaceCommand) Setup(config command.Config, ui command.UI) error
 	}
 
 	cmd.Actor = v2action.NewActor(ccClient, uaaClient, config)
-
+	cmd.SharedActor = sharedaction.NewActor(config)
+	cmd.Config = config
+	cmd.UI = ui
 	return nil
 }
 
@@ -44,20 +47,18 @@ func (cmd CreateSpaceCommand) Execute(args []string) error {
 		return translatableerror.UnrefactoredCommandError{}
 	}
 
-	err := cmd.SharedActor.CheckTarget(true, false)
-	if err != nil {
-		return err
-	}
-
 	spaceName := cmd.RequiredArgs.Space
-	user, err := cmd.Config.CurrentUser()
+	userName, err := cmd.SharedActor.RequireCurrentUser()
 	if err != nil {
 		return err
 	}
 
 	var orgName string
 	if cmd.Organization == "" {
-		orgName = cmd.Config.TargetedOrganization().Name
+		orgName, err = cmd.SharedActor.RequireTargetedOrg()
+		if err != nil {
+			return err
+		}
 	} else {
 		orgName = cmd.Organization
 	}
@@ -65,12 +66,14 @@ func (cmd CreateSpaceCommand) Execute(args []string) error {
 	cmd.UI.DisplayTextWithFlavor("Creating space {{.Space}} in org {{.Org}} as {{.User}}...", map[string]interface{}{
 		"Space": spaceName,
 		"Org":   orgName,
-		"User":  user.Name,
+		"User":  userName,
 	})
 
-	var warnings v2action.Warnings //TODO: Clean this up
-	_, warnings, _ = cmd.Actor.CreateSpace(spaceName, orgName, cmd.Quota)
+	_, warnings, err := cmd.Actor.CreateSpace(spaceName, orgName, cmd.Quota)
 	cmd.UI.DisplayWarnings(warnings)
+	if err != nil {
+		return err
+	}
 
 	cmd.UI.DisplayOK()
 	cmd.UI.DisplayNewline()
