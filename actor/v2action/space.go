@@ -10,7 +10,35 @@ import (
 type Space ccv2.Space
 
 func (actor Actor) CreateSpace(spaceName, orgName, quotaName string) (Space, Warnings, error) {
-	return Space{}, nil, nil
+	var allWarnings Warnings
+	org, getOrgWarnings, err := actor.GetOrganizationByName(orgName)
+
+	allWarnings = append(allWarnings, Warnings(getOrgWarnings)...)
+	if err != nil {
+		return Space{}, allWarnings, err
+	}
+
+	space, spaceWarnings, err := actor.CloudControllerClient.CreateSpace(spaceName, org.GUID)
+	allWarnings = append(allWarnings, Warnings(spaceWarnings)...)
+
+	if quotaName != "" {
+		var getQuotaWarnings Warnings
+		var spaceQuota SpaceQuota
+		spaceQuota, getQuotaWarnings, err = actor.GetSpaceQuotaByName(quotaName, org.GUID)
+		allWarnings = append(allWarnings, Warnings(getQuotaWarnings)...)
+		if err != nil {
+			return Space{}, allWarnings, err
+		}
+		var setQuotaWarnings Warnings
+		setQuotaWarnings, err = actor.SetSpaceQuota(space.GUID, spaceQuota.GUID)
+		allWarnings = append(allWarnings, Warnings(setQuotaWarnings)...)
+
+		if err != nil {
+			return Space{}, allWarnings, err
+		}
+	}
+
+	return Space(space), allWarnings, err
 }
 
 func (actor Actor) DeleteSpaceByNameAndOrganizationName(spaceName string, orgName string) (Warnings, error) {

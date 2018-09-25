@@ -4,6 +4,7 @@ import "fmt"
 
 type SpaceQuotaNotFoundError struct {
 	GUID string
+	Name string
 }
 
 func (e SpaceQuotaNotFoundError) Error() string {

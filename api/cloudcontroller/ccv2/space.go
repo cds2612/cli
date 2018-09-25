@@ -1,6 +1,8 @@
 package ccv2
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/url"
 
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
@@ -50,6 +52,38 @@ func (space *Space) UnmarshalJSON(data []byte) error {
 	space.SpaceQuotaDefinitionGUID = ccSpace.Entity.SpaceQuotaDefinitionGUID
 	space.OrganizationGUID = ccSpace.Entity.OrganizationGUID
 	return nil
+}
+
+type createSpaceRequestBody struct {
+	Name             string `json:"name"`
+	OrganizationGUID string `json:"organization_guid"`
+}
+
+func (client *Client) CreateSpace(spaceName string, orgGUID string) (Space, Warnings, error) {
+	requestBody := createSpaceRequestBody{
+		Name:             spaceName,
+		OrganizationGUID: orgGUID,
+	}
+
+	bodyBytes, _ := json.Marshal(requestBody)
+
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PostSpaceRequest,
+		Body:        bytes.NewReader(bodyBytes),
+	})
+
+	if err != nil {
+		return Space{}, nil, err
+	}
+
+	var space Space
+	response := cloudcontroller.Response{
+		Result: &space,
+	}
+
+	err = client.connection.Make(request, &response)
+
+	return space, response.Warnings, err
 }
 
 // DeleteSpace deletes the Space associated with the provided

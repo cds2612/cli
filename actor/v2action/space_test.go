@@ -51,6 +51,117 @@ var _ = Describe("Space", func() {
 			actor = NewActor(fakeCloudControllerClient, nil, nil)
 		})
 
+		Describe("CreateSpace", func() {
+			When("the org is not found", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetOrganizationsReturns(
+						[]ccv2.Organization{},
+						ccv2.Warnings{
+							"warning-1",
+							"warning-2",
+						},
+						actionerror.OrganizationNotFoundError{Name: "not-an-org-name"},
+					)
+				})
+
+				It("returns an OrganizationNotFoundError", func() {
+					_, warnings, err := actor.CreateSpace("some-space", "not-an-org-name", "quota-name")
+					Expect(err).To(MatchError(actionerror.OrganizationNotFoundError{Name: "not-an-org-name"}))
+					Expect(warnings).To(ConsistOf("warning-1", "warning-2"))
+				})
+			})
+
+			When("the org is found", func() {
+				var expectedSpace Space
+				BeforeEach(func() {
+					expectedSpace = Space{
+						GUID: "some-space-guid",
+						Name: "some-space",
+					}
+
+					fakeCloudControllerClient.CreateSpaceReturns(
+						ccv2.Space{
+							GUID: "some-space-guid",
+							Name: "some-space",
+						},
+						ccv2.Warnings{"create-space-warning-1", "create-space-warning-2"},
+						nil)
+
+					fakeCloudControllerClient.GetOrganizationsReturns([]ccv2.Organization{
+						ccv2.Organization{GUID: "some-org-guid", Name: "some-org-name"}},
+						ccv2.Warnings{},
+						nil,
+					)
+				})
+
+				It("should return the space and all its warnings", func() {
+					space, warnings, err := actor.CreateSpace("some-space", "some-org-name", "")
+					spaceName, orgGuid := fakeCloudControllerClient.CreateSpaceArgsForCall(0)
+					Expect(spaceName).To(Equal("some-space"))
+					Expect(orgGuid).To(Equal("some-org-guid"))
+
+					Expect(space).To(Equal(expectedSpace))
+					Expect(warnings).To(ConsistOf("create-space-warning-1", "create-space-warning-2"))
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				When("a space quota is provided", func() {
+					When("the quota is not found", func() {
+						BeforeEach(func() {
+							fakeCloudControllerClient.GetSpaceQuotasReturns(
+								[]ccv2.SpaceQuota{},
+								ccv2.Warnings{
+									"get-quota-warning-1",
+									"get-quota-warning-2",
+								},
+								nil,
+							)
+						})
+
+						It("returns a SpaceQuotaNotFoundError", func() {
+							_, warnings, err := actor.CreateSpace("some-space", "some-org-name", "not-a-space-quota")
+							Expect(err).To(MatchError(actionerror.SpaceQuotaNotFoundError{Name: "not-a-space-quota"}))
+							Expect(warnings).To(ContainElement("get-quota-warning-1"))
+							Expect(warnings).To(ContainElement("get-quota-warning-2"))
+						})
+					})
+
+					When("the quota is found", func() {
+						var spaceQuotaName = "space-quota-name"
+						var spaceQuotaGuid = "space-quota-guid"
+						BeforeEach(func() {
+							fakeCloudControllerClient.GetSpaceQuotasReturns(
+								[]ccv2.SpaceQuota{
+									ccv2.SpaceQuota{Name: spaceQuotaName, GUID: spaceQuotaGuid},
+								},
+								ccv2.Warnings{
+									"get-quota-warning-1",
+									"get-quota-warning-2",
+								},
+								nil,
+							)
+						})
+
+						It("sets the quota on the space", func() {
+							_, warnings, err := actor.CreateSpace("some-space", "some-org", spaceQuotaName)
+							Expect(warnings).To(ContainElement("get-quota-warning-1"))
+							Expect(warnings).To(ContainElement("get-quota-warning-2"))
+							Expect(err).ToNot(HaveOccurred())
+							Expect(fakeCloudControllerClient.SetSpaceQuotaCallCount()).To(Equal(1))
+						})
+					})
+				})
+
+				When("a space quota is not provided", func() {
+					It("does not call the cloud controller method to get space quotas", func() {
+						_, _, _ = actor.CreateSpace("some-space", "some-org-name", "")
+						Expect(fakeCloudControllerClient.GetSpaceQuotasCallCount()).To(Equal(0))
+					})
+				})
+			})
+
+		})
+
 		Describe("DeleteSpaceByNameAndOrganizationName", func() {
 			var (
 				warnings Warnings

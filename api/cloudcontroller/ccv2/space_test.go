@@ -18,6 +18,96 @@ var _ = Describe("Space", func() {
 		client = NewTestClient()
 	})
 
+	Describe("CreateSpace", func() {
+		var (
+			space      Space
+			warnings   Warnings
+			executeErr error
+		)
+
+		When("The response returns a valid space", func() {
+			JustBeforeEach(func() {
+				space, warnings, executeErr = client.CreateSpace("some-space", "some-org-guid")
+			})
+
+			BeforeEach(func() {
+				response := `{
+			  "metadata": {
+		      "guid": "some-space-guid",
+              "url": "/v2/spaces/some-space-guid" 
+			},
+			  "entity": {
+   				 "name": "some-space",
+                 "organization_guid": "some-org-guid",
+                 "space_quota_definition_guid": "some-quota-guid",
+                 "allow_ssh": true
+			  }
+			}`
+
+				requestBody := map[string]interface{}{
+					"name":              "some-space",
+					"organization_guid": "some-org-guid",
+				}
+
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v2/spaces"),
+						VerifyJSONRepresenting(requestBody),
+						RespondWith(http.StatusCreated, response, http.Header{"X-Cf-Warnings": {"warning-1"}}),
+					))
+			})
+
+			It("return space and all warnings", func() {
+				Expect(executeErr).NotTo(HaveOccurred())
+				Expect(space).To(Equal(
+					Space{
+						GUID:             "some-space-guid",
+						OrganizationGUID: "some-org-guid",
+						Name:             "some-space",
+						SpaceQuotaDefinitionGUID: "some-quota-guid",
+						AllowSSH:                 true,
+					},
+				))
+				Expect(warnings).To(ConsistOf("warning-1"))
+			})
+		})
+
+		When("The user is not authorized to create a space", func() {
+			JustBeforeEach(func() {
+				space, warnings, executeErr = client.CreateSpace("some-space", "some-org-guid")
+			})
+
+			BeforeEach(func() {
+				response := `{
+								"code": 10003,
+								"description": "You are not authorized to perform the requested action"
+							}`
+
+				requestBody := map[string]interface{}{
+					"name":              "some-space",
+					"organization_guid": "some-org-guid",
+				}
+
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v2/spaces"),
+						VerifyJSONRepresenting(requestBody),
+						RespondWith(http.StatusForbidden, response, http.Header{"X-Cf-Warnings": {"warning-1"}}),
+					))
+			})
+
+			It("return empty space with the errors and warnings", func() {
+				Expect(space).To(Equal(
+					Space{},
+				))
+				Expect(warnings).To(ConsistOf("warning-1"))
+				Expect(executeErr).To(MatchError(ccerror.ForbiddenError{
+					Message: "You are not authorized to perform the requested action",
+				}))
+			})
+		})
+	})
+
 	Describe("DeleteSpace", func() {
 		When("no errors are encountered", func() {
 			BeforeEach(func() {
